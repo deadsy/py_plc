@@ -30,11 +30,13 @@ class plc:
 
         self.sv = (1,1)
         self.iv = [0,0,0,1]
+        self.ov = (0,0,0)
 
     def __str__(self):
         s = []
         s.append('(%s)' % fsm.state_str(self.sv))
         s.append('inputs: %s' % fsm.input_str(self.iv))
+        s.append('outputs: %s' % fsm.output_str(self.ov))
         return ' '.join(s)
 
     def key_process(self, event, state, key, switch):
@@ -58,7 +60,7 @@ class plc:
                 self.iv[3] = self.key_process(event, self.iv[3], K_x, _toggle)
 
         # PLC ladder logic
-        self.sv = fsm.fsm(self.sv, self.iv)
+        self.sv, self.ov = fsm.fsm(self.sv, self.iv)
 
 #------------------------------------------------------------------------------
 

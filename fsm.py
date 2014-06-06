@@ -46,43 +46,79 @@ def input_str(iv):
 
 #------------------------------------------------------------------------------
 
+output_bits = 3
+
+output_bit = {
+    'sj_pump': 0,
+    'well_pump': 1,
+    'chlorinator': 2,
+}
+
+def out0(ov, name):
+    ov[output_bit[name]] = 0
+
+def out1(ov, name):
+    ov[output_bit[name]] = 1
+
+def output_str(ov):
+    s = []
+    for (name, bit) in output_bit.items():
+        s.append('%s:%d' % (name, ov[bit]))
+    return ' '.join(s)
+
+#------------------------------------------------------------------------------
+
 def fsm(sv, iv):
 
-    if in1(iv, 'stop'):
-        return state['stopped']
+    # defaults - everything off, no state chnage
+    ov = [0,] * output_bits
+    new_sv = sv
 
-    if sv == state['full']:
+    # outputs
+    if sv == state['fill_sj']:
+        out1(ov, 'sj_pump')
+
+    if sv == state['fill_well']:
+        out1(ov, 'well_pump')
+        out1(ov, 'chlorinator')
+
+    # state changes
+
+    if in1(iv, 'stop'):
+        # stop has been pressed
+        new_sv = state['stopped']
+
+    elif sv == state['full']:
         if in1(iv, 'not_full'):
             # the tank is not full
             if in1(iv, 'start_well'):
                 # manual well switch -> fill from well
-                return state['fill_well']
+                new_sv = state['fill_well']
             elif in1(iv, 'start_sj'):
                 # manual sj switch -> fill from sj
-                return state['fill_sj']
+                new_sv = state['fill_sj']
 
-    if sv == state['fill_sj']:
+    elif sv == state['fill_sj']:
         if in0(iv, 'not_full'):
             # the tank is full
-            return state['full']
+            new_sv = state['full']
         elif in1(iv, 'start_well'):
             # manual well switch -> fill from well
-            return state['fill_well']
+            new_sv = state['fill_well']
 
-    if sv == state['fill_well']:
+    elif sv == state['fill_well']:
         if in0(iv, 'not_full'):
             # the tank is full
-            return state['full']
+            new_sv = state['full']
         elif in1(iv, 'start_sj'):
             # manual sj switch -> fill from sj
-            return state['fill_sj']
+            new_sv = state['fill_sj']
 
-    if sv == state['stopped']:
+    elif sv == state['stopped']:
         if in0(iv, 'stop'):
             # the tank is full
-            return state['full']
+            new_sv = state['full']
 
-    # no state change
-    return sv
+    return new_sv, ov
 
 #------------------------------------------------------------------------------
