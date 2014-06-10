@@ -6,12 +6,13 @@
 
 import pygame
 from pygame.locals import *
-import fsm
+
+import wc1
 
 #------------------------------------------------------------------------------
 
-_screen_x = 640
-_screen_y = 480
+_screen_x = 300
+_screen_y = 300
 
 _pushbutton = 0
 _toggle = 1
@@ -23,49 +24,48 @@ def inv(x):
 
 class plc:
 
-    def __init__(self):
+    def __init__(self, fsm, key_map):
         pygame.init()
         self.screen = pygame.display.set_mode((_screen_x, _screen_y))
         pygame.display.set_caption('PLC')
-
-        self.sv = (1,1)
-        self.iv = [0,0,0,1]
-        self.ov = (0,0,0)
+        self.fsm = fsm
+        self.key_map = key_map
+        self.sv = fsm.s.isv
+        self.iv = fsm.i.iiv
+        self.ov = fsm.o.ov
 
     def __str__(self):
-        s = []
-        s.append('(%s)' % fsm.state_str(self.sv))
-        s.append('inputs: %s' % fsm.input_str(self.iv))
-        s.append('outputs: %s' % fsm.output_str(self.ov))
-        return ' '.join(s)
+        return str(self.fsm)
 
-    def key_process(self, event, state, key, switch):
-        if event.key != key:
-            return state
-        if event.type == KEYDOWN:
-            return inv(state)
-        elif event.type == KEYUP:
-            if switch == _pushbutton:
-                return inv(state)
-            else:
-                return state
-
-    def run(self):
-
+    def get_inputs(self):
+        """work out the current input vector"""
         for event in pygame.event.get():
             if event.type in (KEYDOWN, KEYUP):
-                self.iv[0] = self.key_process(event, self.iv[0], K_f, _pushbutton)
-                self.iv[1] = self.key_process(event, self.iv[1], K_w, _pushbutton)
-                self.iv[2] = self.key_process(event, self.iv[2], K_s, _pushbutton)
-                self.iv[3] = self.key_process(event, self.iv[3], K_x, _toggle)
+                if self.key_map[event.key]:
+                    (bit, switch) = self.key_map[event.key]
+                    if event.type == KEYDOWN:
+                        self.iv[bit] = inv(self.iv[bit])
+                    elif event.type == KEYUP:
+                        if switch == _pushbutton:
+                            self.iv[bit] = inv(self.iv[bit])
 
-        # PLC ladder logic
-        self.sv, self.ov = fsm.fsm(self.sv, self.iv)
+    def run(self):
+        self.get_inputs()
+        # run the state machine
+        self.sv, self.ov = self.fsm.fsm(self.sv, self.iv)
 
 #------------------------------------------------------------------------------
 
 def main():
-    x = plc()
+
+    key_map = {
+        K_f: (0, _pushbutton),
+        K_w: (1, _pushbutton),
+        K_s: (2, _pushbutton),
+        K_x: (3, _toggle),
+    }
+
+    x = plc(wc1.wc1(), key_map)
     prev_state = None
     state_count = 0
 

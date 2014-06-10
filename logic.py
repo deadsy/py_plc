@@ -2,7 +2,8 @@
 #------------------------------------------------------------------------------
 
 from pyeda.inter import *
-import fsm
+
+import wc1
 
 #------------------------------------------------------------------------------
 
@@ -16,68 +17,63 @@ def bin_tuple(x, n):
 
 def main():
 
-    bits = fsm.state_bits + fsm.input_bits
-    n = 1 << bits
+    fsm = wc1.wc1()
+    bits = fsm.s.n + fsm.i.n
 
-    m1 = []
-    m2 = []
-    q1 = []
-    q2 = []
-    q3 = []
+    s_tt = [[] for i in range(fsm.s.n)]
+    o_tt = [[] for i in range(fsm.o.n)]
 
     # run the state machine for all state and input combinations
-    for i in range(n):
-        v = (bin_tuple(i, bits))
-        sv = v[0:fsm.state_bits]
-        iv = v[fsm.state_bits:]
+    for i in range(1 << bits):
+        v = bin_tuple(i, bits)
+        # generate the state and input vector
+        sv = v[0:fsm.s.n]
+        iv = v[fsm.s.n:]
+        # get the next state and output vector
         next_sv, ov = fsm.fsm(sv, iv)
-        m1.append('%d' % next_sv[0])
-        m2.append('%d' % next_sv[1])
-        q1.append('%d' % ov[0])
-        q2.append('%d' % ov[1])
-        q3.append('%d' % ov[2])
-        print('%s %s -> %s' % (sv, iv, next_sv))
-
-    # setup the function value strings
-    m1 = ''.join(m1)
-    m2 = ''.join(m2)
+        # store the next state
+        for i in range(fsm.s.n):
+            s_tt[i].append('%d' % next_sv[i])
+        # store the output
+        for i in range(fsm.o.n):
+            o_tt[i].append('%d' % ov[i])
+        #print('%s %s -> %s %s' % (sv, iv, next_sv, tuple(ov)))
 
     # setup the truth tables
-    X = ttvars('x', bits)
-    m1 = truthtable(X, m1)
-    m2 = truthtable(X, m2)
-    q1 = truthtable(X, q1)
-    q2 = truthtable(X, q2)
-    q3 = truthtable(X, q3)
-
-
+    xvars = ttvars('x', bits)
+    for i in range(fsm.s.n):
+        s_tt[i] = truthtable(xvars, s_tt[i])
+    for i in range(fsm.o.n):
+        o_tt[i] = truthtable(xvars, o_tt[i])
 
     # minimise
-    m1_func, m2_func = espresso_tts(m1, m2)
-    q1_func, q2_func, q3_func = espresso_tts(q1, q2, q3)
+    s_func = [espresso_tts(s_tt[i]) for i in range(fsm.s.n)]
+    s_func = [x for (x,) in s_func]
+    o_func = [espresso_tts(o_tt[i]) for i in range(fsm.o.n)]
+    o_func = [x for (x,) in o_func]
 
-    # dump the minimised function strings in plc variable form
-    m1_next = str(m1_func)
-    m2_next = str(m2_func)
+    # stringify the functions
+    s_func = [str(x) for x in s_func]
+    o_func = [str(x) for x in o_func]
 
-    q1_out = str(q1_func)
-    q2_out = str(q2_func)
-    q3_out = str(q3_func)
+    # work out the x to plc name mapping
+    x2plc = []
+    for i in range(fsm.s.n):
+        x2plc.append('m%d' % (i + 1))
+    for i in range(fsm.i.n):
+        x2plc.append('i%d' % (i + 1))
+    x2plc.reverse()
 
-    # do the x[] -> plc name replace
-    x2plc = ('i4','i3','i2','i1','m2','m1')
+    # apply the mapping
     for i in range(len(x2plc)):
-        m1_next = m1_next.replace('x[%d]' % i, x2plc[i])
-        m2_next = m2_next.replace('x[%d]' % i, x2plc[i])
-        q1_out = q1_out.replace('x[%d]' % i, x2plc[i])
-        q2_out = q2_out.replace('x[%d]' % i, x2plc[i])
-        q3_out = q3_out.replace('x[%d]' % i, x2plc[i])
+        s_func = [x.replace('x[%d]' % i, x2plc[i]) for x in s_func]
+        o_func = [x.replace('x[%d]' % i, x2plc[i]) for x in o_func]
 
-    print('m1_next = %s' % m1_next)
-    print('m2_next = %s' % m2_next)
-    print('q1_out = %s' % q1_out)
-    print('q2_out = %s' % q2_out)
-    print('q3_out = %s' % q3_out)
+    # display the equations in plc form
+    for i in range(fsm.s.n):
+        print('m%d_next = %s' % (i + 1, s_func[i]))
+    for i in range(fsm.o.n):
+        print('q%d = %s' % (i + 1, o_func[i]))
 
 main()
 

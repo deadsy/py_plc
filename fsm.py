@@ -1,124 +1,105 @@
 #------------------------------------------------------------------------------
+"""
 
-def inv(x):
-    return ~x & 1
+general classes for finite state machines
+
+"""
+#------------------------------------------------------------------------------
+
+def bin_tuple(x, n):
+    l = []
+    for bit in range(n):
+        l.append(x & 1)
+        x >>= 1
+    l.reverse()
+    return tuple(l)
 
 #------------------------------------------------------------------------------
 
-state_bits = 2
+class inputs:
+    """map input names to an input bit vector"""
 
-state = {
-    'full': (0, 0),
-    'fill_sj': (0, 1),
-    'fill_well': (1, 0),
-    'stopped': (1, 1),
-}
+    def __init__(self, iiv, names):
+        assert (len(iiv) == len(names)), 'initial vector length != names length'
+        self.iiv = iiv
+        self.iv = iiv
+        self.names = names
+        self.n = len(iiv)
+        self.name2bit = dict(zip(names, range(self.n)))
 
-def state_str(sv):
-    for (name, vector) in state.items():
-        if sv == vector:
-            return name
-    return None
+    def set_iv(self, iv):
+        self.iv = iv
 
-#------------------------------------------------------------------------------
+    def set(self, iv, name):
+        self.iv[self.name2bit[name]] = 1
 
-input_bits = 4
+    def clr(self, name):
+        self.iv[self.name2bit[name]] = 0
 
-input_bit = {
-    'not_full': 0,
-    'start_well': 1,
-    'start_sj': 2,
-    'stop': 3,
-}
+    def is_set(self, name):
+        return self.iv[self.name2bit[name]] != 0
 
-# return 0/1 for the state of the named input in the input vector
-def in1(iv, name):
-    return iv[input_bit[name]] == 1
+    def is_clr(self, name):
+        return self.iv[self.name2bit[name]] == 0
 
-def in0(iv, name):
-    return iv[input_bit[name]] == 0
-
-def input_str(iv):
-    s = []
-    for (name, bit) in input_bit.items():
-        s.append('%s:%d' % (name, iv[bit]))
-    return ' '.join(s)
+    def __str__(self):
+        s = ['%s:%d' % (n, (0,1)[self.is_set(n)]) for n in self.names]
+        return ' '.join(s)
 
 #------------------------------------------------------------------------------
 
-output_bits = 3
+class outputs:
+    """map output names to an output bit vector"""
 
-output_bit = {
-    'sj_pump': 0,
-    'well_pump': 1,
-    'chlorinator': 2,
-}
+    def __init__(self, names):
+        self.names = names
+        self.n = len(names)
+        self.name2bit = dict(zip(names, range(self.n)))
+        self.set_null()
 
-def out0(ov, name):
-    ov[output_bit[name]] = 0
+    def set_null(self):
+        self.ov = [0,] * self.n
 
-def out1(ov, name):
-    ov[output_bit[name]] = 1
+    def set(self, name):
+        self.ov[self.name2bit[name]] = 1
 
-def output_str(ov):
-    s = []
-    for (name, bit) in output_bit.items():
-        s.append('%s:%d' % (name, ov[bit]))
-    return ' '.join(s)
+    def clr(self, name):
+        self.ov[self.name2bit[name]] = 0
+
+    def is_set(self, name):
+        return self.ov[self.name2bit[name]] != 0
+
+    def __str__(self):
+        s = ['%s:%d' % (n, (0,1)[self.is_set(n)]) for n in self.names]
+        return ' '.join(s)
 
 #------------------------------------------------------------------------------
 
-def fsm(sv, iv):
+class state:
+    """map state names to the state vector"""
 
-    # defaults - everything off, no state chnage
-    ov = [0,] * output_bits
-    new_sv = sv
+    def __init__(self, isv, names):
+        assert (len(names) <= (1 << len(isv))), 'not enough bits in the state vector'
+        self.isv = isv
+        self.sv = self.isv
+        self.names = names
+        self.n = len(isv)
+        vset = [bin_tuple(i, self.n) for i in range(len(names))]
+        self.name2vector = dict(zip(names, vset))
+        self.vector2name = dict(zip(vset, names))
 
-    # outputs
-    if sv == state['fill_sj']:
-        out1(ov, 'sj_pump')
+    def set_sv(self, sv):
+        self.sv = sv
 
-    if sv == state['fill_well']:
-        out1(ov, 'well_pump')
-        out1(ov, 'chlorinator')
+    def in_state(self, name):
+        """return True if we are in the named state"""
+        return self.vector2name[self.sv] == name
 
-    # state changes
+    def state(self, name):
+        """return the bit vector for this state"""
+        return self.name2vector[name]
 
-    if in1(iv, 'stop'):
-        # stop has been pressed
-        new_sv = state['stopped']
-
-    elif sv == state['full']:
-        if in1(iv, 'not_full'):
-            # the tank is not full
-            if in1(iv, 'start_well'):
-                # manual well switch -> fill from well
-                new_sv = state['fill_well']
-            elif in1(iv, 'start_sj'):
-                # manual sj switch -> fill from sj
-                new_sv = state['fill_sj']
-
-    elif sv == state['fill_sj']:
-        if in0(iv, 'not_full'):
-            # the tank is full
-            new_sv = state['full']
-        elif in1(iv, 'start_well'):
-            # manual well switch -> fill from well
-            new_sv = state['fill_well']
-
-    elif sv == state['fill_well']:
-        if in0(iv, 'not_full'):
-            # the tank is full
-            new_sv = state['full']
-        elif in1(iv, 'start_sj'):
-            # manual sj switch -> fill from sj
-            new_sv = state['fill_sj']
-
-    elif sv == state['stopped']:
-        if in0(iv, 'stop'):
-            # the tank is full
-            new_sv = state['full']
-
-    return new_sv, ov
+    def __str__(self):
+        return self.vector2name[self.sv]
 
 #------------------------------------------------------------------------------
